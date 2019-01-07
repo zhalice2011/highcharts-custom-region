@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>中国地图</title>
+  </head>
+  <body>
+    <div id="map" style="width:800px;height: 500px;margin: 0 auto"></div>
+    <script src="https://img.hcharts.cn/highmaps/highmaps.js"></script>
+    <script>
+      // 渲染的数据
+      const data = [
+        {
+          'hz-code': '华北',
+          value: 85,
+          province: ['北京', '天津', '河北', '山西', '内蒙古']
+        },
+        {
+          'hz-code': '华东',
+          value: 112,
+          province: ['上海', '江苏', '浙江', '山东', '安徽']
+        },
+        {
+          'hz-code': '东北',
+          value: 123,
+          province: ['辽宁', '吉林', '黑龙江']
+        },
+        {
+          'hz-code': '华中',
+          value: 50,
+          province: ['湖北', '湖南', '河南', '江西']
+        },
+        {
+          'hz-code': '华南',
+          value: 40,
+          province: ['广东', '广西', '海南', '福建']
+        },
+        {
+          'hz-code': '西南',
+          value: 38,
+          province: ['上海', '江苏', '浙江', '山东', '安徽']
+        },
+        {
+          'hz-code': '西北',
+          value: 121,
+          province: ['陕西', '甘肃', '新疆', '青海', '宁夏']
+        },
+        {
+          'hz-code': '港澳台',
+          value: 99,
+          province: ['上海', '江苏', '浙江', '山东', '安徽']
+        }
+      ]
+
+      // 自定义的中国行政大区规划
+      const regionList = {
+        id: 'dalitest',
+        name: '中国地理区划',
+        region: [
+          {
+            name: '华北',
+            province: ['北京', '天津', '河北', '山西', '内蒙古']
+          },
+          {
+            name: '华东',
+            province: ['上海', '江苏', '浙江', '山东', '安徽']
+          },
+          {
+            name: '东北',
+            province: ['辽宁', '吉林', '黑龙江']
+          },
+          {
+            name: '华中',
+            province: ['湖北', '湖南', '河南', '江西']
+          },
+          {
+            name: '华南',
+            province: ['广东', '广西', '海南', '福建']
+          },
+          {
+            name: '西南',
+            province: ['四川', '重庆', '贵州', '云南', '西藏']
+          },
+          {
+            name: '西北',
+            province: ['陕西', '甘肃', '新疆', '青海', '宁夏']
+          },
+          {
+            name: '港澳台',
+            province: ['香港', '澳门', '台湾']
+          }
+        ]
+      }
+
+      // 修改函数
+      const mergeProvinces = (chinaJson, data) => {
+        const { features } = chinaJson
+        const { region } = data
+        const needFilterArr = [] // 需要被过滤掉的index值
+        const map = {}
+        /** 最终生成的map
+                const map = {
+                    name: { name为华东华北这些大区的名字
+                        coordinates: [] // 每个区域中的coordinates合并起来的数组
+                        type: 'MultiPolygon' // 最终的type (MultiPolygon or Polygon)
+                        provinceRelation: [ // 每个省份对应的关系
+                            {
+                                type: 'MultiPolygon',
+                                coordinates: []
+                            }
+                        ],
+                    },
+                }
+        */
+        features.forEach((feat, index) => {
+          const { type, coordinates } = feat.geometry // name = 华东 type = MultiPolygon
+          region.forEach(v => {
+            const { name, province } = v
+            if (province.includes(feat.properties.name)) {
+              const area = map[name] || {}
+              const { coordinates: coord = [], provinceRelation = [] } = area
+              area.coordinates = coord.concat(coordinates)
+              if (type === 'MultiPolygon') {
+                area.type = 'MultiPolygon'
+              }
+              provinceRelation.push({
+                coordinates,
+                type
+              })
+              area.provinceRelation = provinceRelation
+              needFilterArr.push(index) // features中需要被删除的
+              map[name] = area
+            }
+          })
+        })
+        const newFeatures = features.filter(
+          (v, index) => !needFilterArr.includes(index)
+        )
+        Object.keys(map).forEach(areaName => {
+          const { provinceRelation, type } = map[areaName]
+          let coordinates = map[areaName].coordinates
+          if (type === 'MultiPolygon') {
+            // 重新生成coordinates
+            coordinates = []
+            provinceRelation.forEach(v => {
+              coordinates = coordinates.concat(
+                v.type === 'MultiPolygon' ? v.coordinates : [[...v.coordinates]]
+              )
+            })
+          }
+          const feature = {
+            type: 'Feature',
+            id: areaName,
+            properties: {
+              name: areaName,
+              'hz-code': areaName
+            },
+            geometry: {
+              type: type || 'Polygon',
+              coordinates
+            }
+          }
+          newFeatures.push(feature)
+        })
+        chinaJson.features = newFeatures
+      }
+
+      window
+        .fetch(`/china.json`)
+        .then(response =>
+          response
+            .json()
+            .then(mapData => {
+
+               mergeProvinces(mapData, regionList)  // 对china.json进行修改
+
+              // 初始化图表
+              const map = new Highcharts.Map('map', {
+                title: {
+                  text: '中国地图'
+                },
+                colorAxis: {
+                  min: 0,
+                  minColor: 'rgb(255,255,255)',
+                  maxColor: '#006cee'
+                },
+                series: [
+                  {
+                    data: data,
+                    'hz-code': '随机数据',
+                    mapData,
+                    joinBy: 'hz-code'
+                  }
+                ]
+              })
+            })
+            .catch(e => {
+              console.log('e', e)
+            })
+        )
+        .catch(e => {
+          console.log('e', e)
+        })
+    </script>
+  </body>
+</html>
