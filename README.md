@@ -28,4 +28,4 @@ $ live-server
 ```
 
 ## Show
-![Show](https://github.com/zhalice2011/highcharts-custom-region/show.png)	
+![Show](https://raw.githubusercontent.com/zhalice2011/highcharts-custom-region/master/show.png)	
